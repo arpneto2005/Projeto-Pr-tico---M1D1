@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Analista · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Painel do analista</h1>
+      <p class="sub">
+        Fila priorizada (alta prioridade primeiro). Nada gerado pela LLM chega
+        ao cliente sem a sua aprovação nos casos aqui listados.
+      </p>
+      <div class="row" style="margin-bottom: 14px">
+        <button id="atualizar">Atualizar</button>
+        <span class="small muted" id="info"></span>
+      </div>
+      <div id="fila" class="stack"></div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+      const INTENCOES = [
+        "rastreio",
+        "prazo_entrega",
+        "entregue_nao_recebido",
+        "troca",
+        "reembolso",
+        "pagamento",
+        "cancelamento",
+        "horario",
+        "atendente",
+        "outro"
+      ];
+      const MOTIVOS = {
+        sensivel: "Tema sensível",
+        entregue_nao_recebido: "Entregue, não recebido",
+        pedido_cliente: "Cliente pediu atendente",
+        falhas_menu: "Falhas no menu",
+        sem_base: "Sem base de conhecimento",
+        orcamento_llm: "Orçamento de tokens",
+        erro_llm: "Erro na LLM",
+        baixa_confianca: "Baixa confiança",
+        revisao_llm: "Revisão da LLM",
+        numero_sem_base: "Número sem base",
+        termo_proibido: "Termo proibido",
+        fonte_invalida: "Fonte inválida",
+        sem_fonte: "Sem fonte"
+      };
+      let tickets = [];
+
+      async function carregar() {
+        try {
+          tickets = await api("/analista/fila");
+          desenhar();
+          el("info").textContent =
+            tickets.length +
+            " chamado(s) · atualizado " +
+            new Date().toLocaleTimeString("pt-BR");
+        } catch (e) {
+          erroApi(e);
+          el("fila").innerHTML =
+            '<div class="card empty">Não foi possível carregar a fila.</div>';
+        }
+      }
+
+      window.recarregar = carregar;
+
+      function desenhar() {
+        el("fila").innerHTML = tickets.length
+          ? tickets
+              .map(
+                t =>
+                  '<div class="card" data-id="' +
+                  esc(t.id) +
+                  '">' +
+                  '<div class="row"><b>#' +
+                  esc(t.id) +
+                  '</b><span class="badge ' +
+                  (t.prioridade === "alta" ? "err" : "info") +
+                  '">' +
+                  esc(t.prioridade) +
+                  '</span><span class="badge warn">' +
+                  esc(MOTIVOS[t.motivo] || t.motivo) +
+                  "</span>" +
+                  (t.intencao
+                    ? '<span class="badge">' + esc(t.intencao) + "</span>"
+                    : "") +
+                  '<span class="small muted" style="margin-left: auto">' +
+                  fmtData(t.criado_em) +
+                  "</span></div>" +
+                  '<div class="small muted" style="margin-top: 10px">Mensagem do cliente</div>' +
+                  '<div class="pre">' +
+                  esc(t.mensagem_original) +
+                  "</div>" +
+                  '<div class="small muted" style="margin-top: 10px">Resposta ao cliente' +
+                  (t.rascunho_llm
+                    ? " (rascunho da LLM, revise antes de enviar)"
+                    : " (sem rascunho: escreva a resposta)") +
+                  "</div>" +
+                  "<textarea>" +
+                  esc(t.rascunho_llm || "") +
+                  "</textarea>" +
+                  '<div class="row" style="margin-top: 8px"><button class="pri" data-a="aprovar">Aprovar e enviar</button>' +
+                  '<span style="margin-left: auto" class="row"><select>' +
+                  INTENCOES.map(i => "<option>" + i + "</option>").join("") +
+                  '</select><button data-a="rotular">Rotular intenção</button></span></div></div>'
+              )
+              .join("")
+          : '<div class="card empty">Nenhum chamado aguardando. 🎉</div>';
+      }
+
+      el("fila").onclick = async e => {
+        const b = e.target.closest("button[data-a]");
+        if (!b) return;
+
+        const card = b.closest(".card");
+        const id = card.dataset.id;
+
+        try {
+          if (b.dataset.a === "aprovar") {
+            await api("/analista/tickets/" + id + "/aprovar", {
+              method: "POST",
+              body: {
+                texto_final:
+                  card.querySelector("textarea").value.trim() || null
+              }
+            });
+            toast("Resposta enviada ao cliente.", true);
+            carregar();
+          } else {
+            await api("/analista/tickets/" + id + "/rotular", {
+              method: "POST",
+              body: { intencao: card.querySelector("select").value }
+            });
+            toast("Rótulo salvo e classificador retreinado.", true);
+          }
+        } catch (err) {
+          erroApi(err);
+        }
+      };
+
+      el("atualizar").onclick = carregar;
+      carregar();
+      setInterval(carregar, 15000);
+    </script>
+  </body>
+</html>

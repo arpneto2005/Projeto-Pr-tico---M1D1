@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FAQ · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>FAQ oficial</h1>
+      <p class="sub">
+        Itens ativos da base de conhecimento com fonte "faq_oficial".
+      </p>
+      <div class="grid w2" style="grid-template-columns: 1fr 2fr">
+        <div class="stack">
+          <div class="card">
+            <h2>Horário de atendimento</h2>
+            <div id="hor" class="small">…</div>
+          </div>
+          <div class="card">
+            <h2>Perguntas</h2>
+            <div id="lista" class="stack"></div>
+          </div>
+        </div>
+        <div class="card" id="item">
+          <div class="empty">Selecione uma pergunta.</div>
+        </div>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+
+      async function abrir(id) {
+        try {
+          const dados = await api("/faq/" + encodeURIComponent(id));
+          el("item").innerHTML =
+            "<h2>" +
+            esc(dados.titulo) +
+            '</h2><div class="pre">' +
+            esc(dados.conteudo) +
+            '</div><div class="meta"><span class="badge warn">fonte: ' +
+            esc(dados.id) +
+            '</span><span class="badge">' +
+            esc(dados.fonte) +
+            "</span></div>";
+        } catch (error) {
+          erroApi(error);
+        }
+      }
+
+      (async () => {
+        try {
+          const horario = await api("/atendimento/horario");
+          el("hor").innerHTML =
+            (horario.aberto_agora
+              ? '<span class="badge ok">Aberto agora</span>'
+              : '<span class="badge warn">Fechado agora</span>') +
+            '<div style="margin-top: 6px">' +
+            esc(horario.mensagem) +
+            "</div>";
+
+          const itens = await api("/faq");
+          el("lista").innerHTML = itens.length
+            ? itens
+                .map(
+                  item =>
+                    '<button data-id="' +
+                    esc(item.id) +
+                    '" style="text-align: left; width: 100%">' +
+                    esc(item.titulo) +
+                    "</button>"
+                )
+                .join("")
+            : '<div class="empty">Sem itens.</div>';
+
+          el("lista").onclick = event => {
+            const botao = event.target.closest("button[data-id]");
+            if (botao) {
+              abrir(botao.dataset.id);
+            }
+          };
+
+          if (itens.length) {
+            abrir(itens[0].id);
+          }
+        } catch (error) {
+          erroApi(error);
+        }
+      })();
+    </script>
+  </body>
+</html>

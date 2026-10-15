@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pedidos · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Consulta de pedido</h1>
+      <p class="sub">
+        Rotas determinísticas da Camada 1: rastreio, prazo, troca e reembolso.
+      </p>
+      <div class="card row">
+        <input
+          id="num"
+          placeholder="Número do pedido"
+          inputmode="numeric"
+          style="width: 220px"
+        >
+        <button class="pri" id="ok">Consultar</button>
+        <span class="small muted">
+          Teste:
+          <span class="chip" data-n="123456">123456</span>
+          <span class="chip" data-n="654321">654321</span>
+          <span class="chip" data-n="111111">111111</span>
+        </span>
+      </div>
+      <div id="res" class="grid w2" style="margin-top: 16px"></div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+      const ROTAS = [
+        ["rastreio", "Onde está meu pedido?"],
+        ["prazo-entrega", "Prazo de entrega"],
+        ["troca", "Posso trocar?"],
+        ["reembolso", "Reembolso"]
+      ];
+
+      async function consultar(numero) {
+        numero = (numero || el("num").value).trim();
+        if (!numero) {
+          return;
+        }
+
+        el("num").value = numero;
+        el("res").innerHTML = '<div class="empty">Consultando…</div>';
+        const resultados = await Promise.allSettled(
+          ROTAS.map(([rota]) =>
+            api("/pedidos/" + encodeURIComponent(numero) + "/" + rota)
+          )
+        );
+
+        if (resultados.every(resultado => resultado.status === "rejected")) {
+          el("res").innerHTML =
+            '<div class="card empty">Pedido ' +
+            esc(numero) +
+            " não encontrado.</div>";
+          return;
+        }
+
+        el("res").innerHTML = resultados
+          .map((resultado, indice) => {
+            const titulo = ROTAS[indice][1];
+            if (resultado.status === "rejected") {
+              return (
+                '<div class="card"><h2>' +
+                titulo +
+                '</h2><span class="badge err">' +
+                esc(resultado.reason.message) +
+                "</span></div>"
+              );
+            }
+
+            const dadosResposta = resultado.value;
+            const dadosPedido = dadosResposta.dados;
+            let extra = "";
+
+            if ("elegivel" in dadosResposta) {
+              extra =
+                dadosResposta.elegivel === true
+                  ? '<span class="badge ok">Elegível até ' +
+                    esc(dadosResposta.limite) +
+                    "</span>"
+                  : dadosResposta.elegivel === false
+                    ? '<span class="badge err">Prazo encerrado em ' +
+                      esc(dadosResposta.limite) +
+                      "</span>"
+                    : '<span class="badge warn">Aguardando entrega</span>';
+            }
+
+            if ("prazo_estorno" in dadosResposta) {
+              extra =
+                '<span class="badge info">Estorno: ' +
+                esc(dadosResposta.prazo_estorno) +
+                "</span>";
+            }
+
+            return (
+              '<div class="card"><h2>' +
+              titulo +
+              '</h2><div class="pre">' +
+              esc(dadosResposta.mensagem) +
+              '</div><div class="meta">' +
+              extra +
+              '</div><dl class="kv" style="margin-top: 10px"><dt>Status</dt><dd>' +
+              esc(dadosPedido.status) +
+              "</dd><dt>Previsão</dt><dd>" +
+              esc(dadosPedido.previsao) +
+              "</dd><dt>Entregue em</dt><dd>" +
+              esc(dadosPedido.entregue_em || "—") +
+              "</dd><dt>Pagamento</dt><dd>" +
+              esc(dadosPedido.pagamento) +
+              "</dd><dt>Rastreio</dt><dd>" +
+              esc(dadosPedido.codigo) +
+              "</dd></dl></div>"
+            );
+          })
+          .join("");
+      }
+
+      el("ok").onclick = () => consultar();
+      el("num").onkeydown = event => {
+        if (event.key === "Enter") {
+          consultar();
+        }
+      };
+      document.querySelectorAll("[data-n]").forEach(chip => {
+        chip.onclick = () => consultar(chip.dataset.n);
+      });
+    </script>
+  </body>
+</html>

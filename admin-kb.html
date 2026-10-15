@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Base de conhecimento · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Base de conhecimento</h1>
+      <p class="sub">
+        Fontes autorizadas do RAG. A LLM só enxerga itens ativos desta tabela,
+        o que restringe a interpretação de políticas.
+      </p>
+      <div class="grid w2" style="grid-template-columns: 3fr 2fr">
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Título</th>
+                <th>Fonte</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tb"></tbody>
+          </table>
+        </div>
+        <div class="card stack">
+          <h2 id="ft">Novo item</h2>
+          <input
+            id="id"
+            placeholder="id (ex.: pol-troca)"
+            style="width: 100%"
+          >
+          <select id="fonte" style="width: 100%">
+            <option value="faq_oficial">faq_oficial</option>
+            <option value="politica_interna">politica_interna</option>
+            <option value="documentacao_operacional">
+              documentacao_operacional
+            </option>
+          </select>
+          <input id="titulo" placeholder="Título" style="width: 100%">
+          <textarea
+            id="conteudo"
+            placeholder="Conteúdo (o texto que o cliente pode receber)"
+            style="min-height: 140px"
+          ></textarea>
+          <input
+            id="chaves"
+            placeholder="Palavras-chave (ajudam a recuperação)"
+            style="width: 100%"
+          >
+          <label class="small">
+            <input type="checkbox" id="ativo" checked>
+            Ativo
+          </label>
+          <div class="row">
+            <button class="pri" id="salvar">Salvar</button>
+            <button id="limpar">Limpar</button>
+            <button class="danger" id="desativar" style="margin-left: auto">
+              Desativar
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+      let itens = [];
+
+      async function carregar() {
+        try {
+          itens = await api("/admin/conhecimento");
+          el("tb").innerHTML =
+            itens
+              .map(
+                item =>
+                  '<tr class="click" data-id="' +
+                  esc(item.id) +
+                  '"><td>' +
+                  esc(item.id) +
+                  "</td><td>" +
+                  esc(item.titulo) +
+                  "</td><td>" +
+                  esc(item.fonte) +
+                  "</td><td>" +
+                  (item.ativo
+                    ? '<span class="badge ok">ativo</span>'
+                    : '<span class="badge err">inativo</span>') +
+                  "</td></tr>"
+              )
+              .join("") ||
+            '<tr><td colspan="4" class="empty">Vazio</td></tr>';
+        } catch (error) {
+          erroApi(error);
+        }
+      }
+
+      window.recarregar = carregar;
+
+      function limpar() {
+        ["id", "titulo", "conteudo", "chaves"].forEach(
+          chave => (el(chave).value = "")
+        );
+        el("fonte").value = "faq_oficial";
+        el("ativo").checked = true;
+        el("id").disabled = false;
+        el("ft").textContent = "Novo item";
+      }
+
+      el("tb").onclick = event => {
+        const linha = event.target.closest("tr[data-id]");
+        if (!linha) {
+          return;
+        }
+
+        const item = itens.find(dado => dado.id === linha.dataset.id);
+        el("id").value = item.id;
+        el("id").disabled = true;
+        el("fonte").value = item.fonte;
+        el("titulo").value = item.titulo;
+        el("conteudo").value = item.conteudo;
+        el("chaves").value = item.palavras_chave;
+        el("ativo").checked = !!item.ativo;
+        el("ft").textContent = "Editar: " + item.id;
+      };
+
+      el("limpar").onclick = limpar;
+      el("salvar").onclick = async () => {
+        try {
+          await api("/admin/conhecimento", {
+            method: "POST",
+            body: {
+              id: el("id").value.trim(),
+              fonte: el("fonte").value,
+              titulo: el("titulo").value.trim(),
+              conteudo: el("conteudo").value.trim(),
+              palavras_chave: el("chaves").value.trim(),
+              ativo: el("ativo").checked ? 1 : 0
+            }
+          });
+          toast("Item salvo.", true);
+          limpar();
+          carregar();
+        } catch (error) {
+          erroApi(error);
+        }
+      };
+
+      el("desativar").onclick = async () => {
+        const id = el("id").value.trim();
+        if (!id || !confirm("Desativar o item " + id + "?")) {
+          return;
+        }
+
+        try {
+          await api("/admin/conhecimento/" + encodeURIComponent(id), {
+            method: "DELETE"
+          });
+          toast("Item desativado.", true);
+          limpar();
+          carregar();
+        } catch (error) {
+          erroApi(error);
+        }
+      };
+
+      carregar();
+    </script>
+  </body>
+</html>

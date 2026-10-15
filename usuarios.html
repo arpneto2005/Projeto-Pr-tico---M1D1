@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Usuários · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Usuários</h1>
+      <p class="sub">
+        O cadastro público cria clientes. Use este formulário para criar contas
+        de atendente.
+      </p>
+      <div class="grid w2">
+        <form class="card stack" id="attendantForm">
+          <h2>Novo atendente</h2>
+          <input
+            id="username"
+            placeholder="Usuário"
+            minlength="3"
+            maxlength="32"
+            autocomplete="off"
+            required
+          >
+          <input
+            id="password"
+            type="password"
+            placeholder="Senha (mínimo 8 caracteres)"
+            minlength="8"
+            maxlength="128"
+            autocomplete="new-password"
+            required
+          >
+          <button class="pri" type="submit">Criar atendente</button>
+        </form>
+        <div class="card">
+          <h2>Contas cadastradas</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Perfil</th>
+                <th>Criada em</th>
+              </tr>
+            </thead>
+            <tbody id="users"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+
+      async function carregarUsuarios() {
+        try {
+          const usuarios = await api("/admin/usuarios");
+          el("users").innerHTML =
+            usuarios
+              .map(
+                usuario =>
+                  "<tr><td>" +
+                  esc(usuario.username) +
+                  "</td><td>" +
+                  esc(usuario.role) +
+                  "</td><td>" +
+                  fmtData(usuario.criada_em) +
+                  "</td></tr>"
+              )
+              .join("") ||
+            '<tr><td colspan="3" class="empty">Nenhum usuário.</td></tr>';
+        } catch (error) {
+          erroApi(error);
+        }
+      }
+
+      el("attendantForm").onsubmit = async event => {
+        event.preventDefault();
+        try {
+          await api("/admin/usuarios", {
+            method: "POST",
+            body: {
+              username: el("username").value.trim(),
+              password: el("password").value
+            }
+          });
+          toast("Atendente criado.", true);
+          el("attendantForm").reset();
+          carregarUsuarios();
+        } catch (error) {
+          erroApi(error);
+        }
+      };
+
+      carregarUsuarios();
+    </script>
+  </body>
+</html>

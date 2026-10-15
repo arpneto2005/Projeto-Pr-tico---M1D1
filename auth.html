@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Entrar · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Acesso ao suporte</h1>
+      <p class="sub">Entre na sua conta ou cadastre-se como cliente.</p>
+      <div class="grid w2">
+        <form class="card stack" id="loginForm">
+          <h2>Entrar</h2>
+          <input
+            id="loginUsername"
+            name="username"
+            placeholder="Usuário"
+            autocomplete="username"
+            required
+          >
+          <input
+            id="loginPassword"
+            name="password"
+            type="password"
+            placeholder="Senha"
+            autocomplete="current-password"
+            required
+          >
+          <button class="pri" type="submit">Entrar</button>
+        </form>
+        <form class="card stack" id="registerForm">
+          <h2>Cadastrar como cliente</h2>
+          <input
+            id="registerUsername"
+            name="username"
+            placeholder="Escolha um usuário"
+            autocomplete="username"
+            minlength="3"
+            maxlength="32"
+            required
+          >
+          <input
+            id="registerPassword"
+            name="new-password"
+            type="password"
+            placeholder="Senha (mínimo 8 caracteres)"
+            autocomplete="new-password"
+            minlength="8"
+            maxlength="128"
+            required
+          >
+          <button class="pri" type="submit">Criar conta</button>
+          <p class="small muted">
+            O cadastro público cria somente contas de cliente. Contas de
+            atendente são criadas pelo admin.
+          </p>
+        </form>
+      </div>
+      <div id="authMessage" class="card" role="status" hidden></div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+
+      function irParaPainel(usuario) {
+        store("sid", "");
+        location.href =
+          usuario.role === "attendant" ? "analista.html" : "index.html";
+      }
+
+      el("loginForm").onsubmit = async event => {
+        event.preventDefault();
+        try {
+          const resultado = await api("/auth/login", {
+            method: "POST",
+            body: {
+              username: el("loginUsername").value.trim(),
+              password: el("loginPassword").value
+            }
+          });
+          irParaPainel(resultado.usuario);
+        } catch (error) {
+          el("authMessage").hidden = false;
+          el("authMessage").textContent = error.message;
+        }
+      };
+
+      el("registerForm").onsubmit = async event => {
+        event.preventDefault();
+        try {
+          const resultado = await api("/auth/register", {
+            method: "POST",
+            body: {
+              username: el("registerUsername").value.trim(),
+              password: el("registerPassword").value
+            }
+          });
+          irParaPainel(resultado.usuario);
+        } catch (error) {
+          el("authMessage").hidden = false;
+          el("authMessage").textContent = error.message;
+        }
+      };
+    </script>
+  </body>
+</html>

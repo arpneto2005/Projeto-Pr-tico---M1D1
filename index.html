@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Moda Viva · Suporte</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Central de suporte híbrido</h1>
+      <p class="sub">
+        Regras, classificador de intenção e LLM controlado, com humano no
+        circuito (Projeto Prático M1D1).
+      </p>
+      <div class="grid" id="status">
+        <div class="card">
+          <div class="muted small">Atendimento humano</div>
+          <div class="big" id="stHorario">…</div>
+          <div class="small muted" id="stMsg"></div>
+        </div>
+        <div class="card">
+          <div class="muted small">API</div>
+          <div class="big" id="stApi">…</div>
+          <div class="small muted">Flask + SQLite</div>
+        </div>
+        <div class="card">
+          <div class="muted small">Chamados aguardando analista</div>
+          <div class="big" id="stFila">—</div>
+          <div class="small muted">Acesso para equipe</div>
+        </div>
+      </div>
+      <h2 style="margin-top: 26px">Páginas</h2>
+      <div class="grid">
+        <a class="card" href="chat.html" data-roles="customer">
+          <h2>Chat do cliente</h2>
+          <div class="muted small">
+            Pipeline completo das 3 camadas, com botão de atendente, fontes e
+            respostas do analista.
+          </div>
+        </a>
+        <a class="card" href="pedidos.html" data-roles="customer">
+          <h2>Consulta de pedido</h2>
+          <div class="muted small">
+            Rastreio, prazo de entrega, elegibilidade de troca e prazo de
+            reembolso.
+          </div>
+        </a>
+        <a class="card" href="faq.html">
+          <h2>FAQ oficial e horário</h2>
+          <div class="muted small">
+            Perguntas frequentes da base de conhecimento e horário de
+            atendimento.
+          </div>
+        </a>
+        <a class="card" href="classificador.html">
+          <h2>Classificador de intenção</h2>
+          <div class="muted small">
+            Teste a variação linguística: regras, classificador ou LLM.
+          </div>
+        </a>
+        <a class="card" href="analista.html" data-roles="attendant admin">
+          <h2>Painel do analista</h2>
+          <div class="muted small">
+            Fila priorizada, edição do rascunho, aprovação e rotulagem.
+          </div>
+        </a>
+        <a class="card" href="admin-kb.html" data-roles="admin">
+          <h2>Base de conhecimento</h2>
+          <div class="muted small">
+            Fontes autorizadas usadas pelo RAG: criar, editar e desativar.
+          </div>
+        </a>
+        <a class="card" href="metricas.html" data-roles="admin">
+          <h2>Métricas e segurança</h2>
+          <div class="muted small">
+            Automação, tempo de resposta, tokens, motivos de escalonamento e
+            eventos.
+          </div>
+        </a>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      (async () => {
+        try {
+          const horario = await api("/atendimento/horario");
+          document.getElementById("stHorario").innerHTML = horario.aberto_agora
+            ? '<span class="badge ok">Aberto</span>'
+            : '<span class="badge warn">Fechado</span>';
+          document.getElementById("stMsg").textContent =
+            horario.inicio + " às " + horario.fim;
+          document.getElementById("stApi").innerHTML =
+            '<span class="badge ok">Online</span>';
+        } catch (error) {
+          document.getElementById("stApi").innerHTML =
+            '<span class="badge err">Offline</span>';
+        }
+
+        try {
+          const sessao = await api("/auth/me");
+          if (
+            sessao.usuario &&
+            ["admin", "attendant"].includes(sessao.usuario.role)
+          ) {
+            document.getElementById("stFila").textContent = (
+              await api("/analista/fila")
+            ).length;
+          }
+        } catch (error) {
+          erroApi(error);
+        }
+      })();
+
+      window.recarregar = () => location.reload();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Classificador · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Classificador de intenção</h1>
+      <p class="sub">
+        Mostra qual camada resolveria a frase: regras, classificador ou LLM
+        controlado.
+      </p>
+      <div class="card stack">
+        <textarea id="t" placeholder="Digite uma frase de cliente…"></textarea>
+        <div class="row">
+          <button class="pri" id="go">Classificar</button>
+          <span class="small muted">Exemplos:</span>
+          <span id="ex" class="row"></span>
+        </div>
+      </div>
+      <div class="card" id="r" style="margin-top: 14px">
+        <div class="empty">O resultado aparece aqui.</div>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+      const EX = [
+        "Meu pedido sumiu.",
+        "Ainda não recebi minha entrega",
+        "O rastreio mostra entregue, mas não chegou nada.",
+        "cadê minha encomenda?",
+        "quanto demora pra chegar",
+        "quero meu dinheiro de volta",
+        "Vocês patrocinam eventos de skate?"
+      ];
+
+      el("ex").innerHTML = EX.map(
+        texto => '<span class="chip">' + esc(texto) + "</span>"
+      ).join("");
+      el("ex").onclick = event => {
+        if (event.target.classList.contains("chip")) {
+          el("t").value = event.target.textContent;
+          classificar();
+        }
+      };
+
+      async function classificar() {
+        const texto = el("t").value.trim();
+        if (!texto) {
+          return;
+        }
+
+        try {
+          const dados = await api("/classificar", {
+            method: "POST",
+            body: { texto }
+          });
+          const cor =
+            dados.camada === "regras"
+              ? "ok"
+              : dados.camada === "classificador"
+                ? "info"
+                : "warn";
+
+          el("r").innerHTML =
+            '<div class="row"><span class="badge ' +
+            cor +
+            '">camada: ' +
+            esc(dados.camada) +
+            '</span><span class="badge ' +
+            (dados.aciona_llm ? "warn" : "ok") +
+            '">' +
+            (dados.aciona_llm
+              ? "aciona LLM controlado / humano"
+              : "resolvido sem LLM") +
+            '</span></div><div class="big" style="margin: 12px 0 6px">' +
+            esc(dados.intencao) +
+            '</div><div class="small muted">Confiança ' +
+            pct(dados.confianca) +
+            '</div><div class="bar" style="margin-top: 6px"><i style="width: ' +
+            Math.round(dados.confianca * 100) +
+            '%"></i></div>';
+        } catch (error) {
+          erroApi(error);
+        }
+      }
+
+      el("go").onclick = classificar;
+    </script>
+  </body>
+</html>

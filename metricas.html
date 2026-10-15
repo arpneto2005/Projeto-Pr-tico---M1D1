@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Métricas · Moda Viva</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="nav"></div>
+    <main>
+      <h1>Métricas e segurança</h1>
+      <p class="sub">
+        Objetivos do PDF: reduzir tempo de resposta e custo operacional sem
+        perder qualidade.
+      </p>
+      <div class="grid" id="kpis"></div>
+      <div class="grid w2" style="margin-top: 14px">
+        <div class="card">
+          <h2>Tempo médio de resposta</h2>
+          <div id="tempo"></div>
+        </div>
+        <div class="card">
+          <h2>Orçamento diário de tokens (LLM)</h2>
+          <div id="llm"></div>
+        </div>
+        <div class="card">
+          <h2>Respostas por camada</h2>
+          <div id="camadas" class="stack"></div>
+        </div>
+        <div class="card">
+          <h2>Chamados por motivo</h2>
+          <div id="motivos" class="stack"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top: 14px">
+        <h2>Eventos de segurança (prompt abuse)</h2>
+        <div id="segc" class="row" style="margin-bottom: 8px"></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Quando</th>
+              <th>Tipo</th>
+              <th>Sessão</th>
+              <th>Detalhe</th>
+            </tr>
+          </thead>
+          <tbody id="ev"></tbody>
+        </table>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      const el = id => document.getElementById(id);
+
+      const barras = objeto => {
+        const maximo = Math.max(1, ...Object.values(objeto));
+        const entradas = Object.entries(objeto);
+
+        return entradas.length
+          ? entradas
+              .map(
+                ([chave, valor]) =>
+                  '<div><div class="row small"><span>' +
+                  esc(chave) +
+                  '</span><b style="margin-left: auto">' +
+                  valor +
+                  '</b></div><div class="bar"><i style="width: ' +
+                  (valor / maximo) * 100 +
+                  '%"></i></div></div>'
+              )
+              .join("")
+          : '<div class="muted small">Sem dados ainda.</div>';
+      };
+
+      const h = valor =>
+        valor == null
+          ? "—"
+          : valor < 1
+            ? Math.round(valor * 60) + " min"
+            : valor.toFixed(1) + " h";
+
+      async function carregar() {
+        try {
+          const metricas = await api("/metricas");
+          el("kpis").innerHTML = [
+            ["Conversas", metricas.conversas],
+            ["Taxa de automação", pct(metricas.taxa_automacao)],
+            ["Resolvidas sem humano", metricas.resolvidas_sem_humano],
+            ["Chamados abertos", metricas.tickets_abertos]
+          ]
+            .map(
+              ([chave, valor]) =>
+                '<div class="card"><div class="muted small">' +
+                chave +
+                '</div><div class="big">' +
+                valor +
+                "</div></div>"
+            )
+            .join("");
+
+          const tempo = metricas.tempo_resposta;
+          const base = tempo.baseline_pdf_horas;
+          const global = tempo.global_medio_horas;
+          el("tempo").innerHTML =
+            '<dl class="kv"><dt>Linha de base (PDF)</dt><dd>' +
+            h(base) +
+            '</dd><dt>Média global</dt><dd><b>' +
+            h(global) +
+            "</b> " +
+            (metricas.conversas
+              ? '<span class="badge ' +
+                (global < base ? "ok" : "warn") +
+                '">' +
+                (global < base
+                  ? "−" + Math.round((1 - global / base) * 100) + "% vs. base"
+                  : "acima da base") +
+                "</span>"
+              : "") +
+            "</dd><dt>Só atendimento humano</dt><dd>" +
+            h(tempo.humano_medio_horas) +
+            '</dd></dl><p class="small muted">Conversas resolvidas automaticamente contam como ~0 h (aproximação).</p>';
+
+          const usoLlm = metricas.llm;
+          const percentual = usoLlm.orcamento_dia
+            ? Math.min(
+                100,
+                (usoLlm.tokens_hoje / usoLlm.orcamento_dia) * 100
+              )
+            : 100;
+          el("llm").innerHTML =
+            '<div class="row small"><span>Hoje: ' +
+            usoLlm.tokens_hoje.toLocaleString("pt-BR") +
+            " / " +
+            usoLlm.orcamento_dia.toLocaleString("pt-BR") +
+            '</span><b style="margin-left: auto">' +
+            Math.round(percentual) +
+            '%</b></div><div class="bar"><i style="width: ' +
+            percentual +
+            '%"></i></div><p class="small muted">Total acumulado: ' +
+            usoLlm.tokens_total.toLocaleString("pt-BR") +
+            " tokens. Ao esgotar, os casos vão para humano.</p>";
+
+          el("camadas").innerHTML = barras(metricas.respostas_por_camada);
+          el("motivos").innerHTML = barras(metricas.tickets_por_motivo);
+          el("segc").innerHTML = Object.keys(metricas.seguranca).length
+            ? Object.entries(metricas.seguranca)
+                .map(
+                  ([chave, valor]) =>
+                    '<span class="badge err">' +
+                    esc(chave) +
+                    ": " +
+                    valor +
+                    "</span>"
+                )
+                .join("")
+            : '<span class="muted small">Nenhum evento registrado.</span>';
+
+          const eventos = await api(
+            "/admin/seguranca/eventos?limit=25"
+          );
+          el("ev").innerHTML =
+            eventos
+              .map(
+                evento =>
+                  "<tr><td>" +
+                  fmtData(evento.criado_em) +
+                  '</td><td><span class="badge err">' +
+                  esc(evento.tipo) +
+                  "</span></td><td>" +
+                  esc(evento.session_id) +
+                  '</td><td class="pre">' +
+                  esc(evento.detalhe) +
+                  "</td></tr>"
+              )
+              .join("") ||
+            '<tr><td colspan="4" class="empty">Sem eventos.</td></tr>';
+        } catch (error) {
+          erroApi(error);
+        }
+      }
+
+      window.recarregar = carregar;
+      carregar();
+      setInterval(carregar, 30000);
+    </script>
+  </body>
+</html>
